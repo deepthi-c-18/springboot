@@ -1,0 +1,72 @@
+---
+# =====================================================
+# Ansible Playbook - Remove MySQL Database Container
+# Student Management System
+# =====================================================
+# This playbook removes MySQL database container
+
+- name: Remove MySQL Database Container
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    db_container_name: mysql-db
+    network_name: student-network
+    remove_volumes: false
+
+  tasks:
+    # Display task
+    - name: Display removal task
+      debug:
+        msg:
+          - "Removing MySQL database container"
+          - "Container: {{ db_container_name }}"
+          - "Remove Volumes: {{ remove_volumes }}"
+
+    # Stop database container
+    - name: Stop MySQL container
+      docker_container:
+        name: "{{ db_container_name }}"
+        state: stopped
+        force_kill: yes
+      ignore_errors: yes
+
+    # Remove database container
+    - name: Remove MySQL container
+      docker_container:
+        name: "{{ db_container_name }}"
+        state: absent
+      ignore_errors: yes
+
+    # Remove volumes if requested
+    - name: Remove volumes
+      docker_volume:
+        name: "{{ item }}"
+        state: absent
+      with_items:
+        - mysql_data
+      when: remove_volumes
+      ignore_errors: yes
+
+    # Clean up dangling volumes
+    - name: Cleanup dangling volumes
+      shell: docker volume prune -f
+      ignore_errors: yes
+
+    # Display success message
+    - name: MySQL container removal successful
+      debug:
+        msg:
+          - "✓ MySQL container removed successfully!"
+          - "Container: {{ db_container_name }} removed"
+
+  # Error handling
+  rescue:
+    - name: Display error message
+      debug:
+        msg: "Error removing MySQL container"
+
+    - name: Fail the playbook
+      fail:
+        msg: "MySQL container removal failed"

@@ -1,0 +1,67 @@
+---
+# =====================================================
+# Ansible Playbook - Remove Spring Boot Application Container
+# Student Management System
+# =====================================================
+# This playbook removes Spring Boot application container
+
+- name: Remove Spring Boot Application Container
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    app_container_name: spring-app
+    network_name: student-network
+
+  tasks:
+    # Display task
+    - name: Display removal task
+      debug:
+        msg:
+          - "Removing Spring Boot application container"
+          - "Container: {{ app_container_name }}"
+
+    # Stop application container
+    - name: Stop application container
+      docker_container:
+        name: "{{ app_container_name }}"
+        state: stopped
+        force_kill: yes
+      ignore_errors: yes
+
+    # Remove application container
+    - name: Remove application container
+      docker_container:
+        name: "{{ app_container_name }}"
+        state: absent
+      ignore_errors: yes
+
+    # Remove application logs volume
+    - name: Remove application logs volume
+      docker_volume:
+        name: app_logs
+        state: absent
+      ignore_errors: yes
+
+    # Clean up dangling volumes
+    - name: Cleanup dangling volumes
+      shell: docker volume prune -f
+      ignore_errors: yes
+
+    # Display success message
+    - name: Application container removal successful
+      debug:
+        msg:
+          - "✓ Application container removed successfully!"
+          - "Container: {{ app_container_name }} removed"
+
+  # Error handling
+  rescue:
+    - name: Display error message
+      debug:
+        msg: "Error removing application container"
+
+    - name: Fail the playbook
+      fail:
+        msg: "Application container removal failed"

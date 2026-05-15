@@ -1,0 +1,238 @@
+---
+# =====================================================
+# Ansible Playbook - Deploy Spring Boot Application
+# Student Management System
+# =====================================================
+# This playbook deploys Spring Boot application container
+
+- name: Deploy Spring Boot Application Container
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    app_container_name: spring-app
+    app_image: "{{ app_image | default('student-management-system:latest') }}"
+    app_port: "{{ app_port | default('8085') }}"
+    db_host: "{{ db_host | default('mysql-db') }}"
+    db_port: "{{ db_port | default('3306') }}"
+    db_name: "{{ db_name | default('studentdb') }}"
+    db_user: "{{ db_user | default('student') }}"
+    db_password: "{{ db_password | default('student123') }}"
+    network_name: student-network
+
+  tasks:
+    # Display variables
+    - name: Display deployment variables
+      debug:
+        msg:
+          - "Application Container: {{ app_container_name }}"
+          - "Application Image: {{ app_image }}"
+          - "Application Port: {{ app_port }}"
+          - "Database Host: {{ db_host }}"
+          - "Database Port: {{ db_port }}"
+          - "Database Name: {{ db_name }}"
+
+    # Install Docker if not already installed
+    - name: Check if Docker is installed
+      stat:
+        path: /usr/bin/docker
+      register: docker_binary
+
+    - name: Install Docker if not present
+      block:
+        - name: Install Docker dependencies
+          apt:
+            name:
+              - apt-transport-https
+              - ca-certificates
+              - curl
+              - gnupg
+              - lsb-release
+            state: present
+          retries: 3
+          delay: 5
+
+        - name: Add Docker GPG key
+          apt_key:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            state: present
+          retries: 3
+          delay: 5
+
+        - name: Add Docker repository
+          apt_repository:
+            repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+            state: present
+          retries: 3
+          delay: 5
+
+        - name: Install Docker
+          apt:
+            name:
+              - docker-ce
+              - docker-ce-cli
+              - containerd.io
+              - docker-compose-plugin
+            state: present
+          retries: 3
+          delay: 5
+
+        - name: Start Docker service
+          systemd:
+            name: docker
+            state: started
+            enabled: yes
+            daemon_reload: yes
+      when: not docker_binary.stat.exists
+
+    - name: Ensure Docker service is running
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    # Ensure network exists
+    - name: Ensure student network exists
+      docker_network:
+        name: "{{ network_name }}"
+        driver: bridge
+        state: present
+
+    # Pull latest application image
+    - name: Pull application Docker image
+      docker_image:
+        name: "{{ app_image }}"
+        source: pull
+        pull: always
+
+    # Stop and remove existing application container if it exists
+    - name: Remove existing application container if running
+      docker_container:
+        name: "{{ app_container_name }}"
+        state: absent
+        force_kill: yes
+      ignore_errors: yes
+
+    # Create application container
+    - name: Create and start Spring Boot application container
+      docker_container:
+        name: "{{ app_container_name }}"
+        image: "{{ app_image }}"
+        state: started
+        restart_policy: unless-stopped
+        ports:
+          - "{{ app_port }}:8080"
+        env:
+          SPRING_DATASOURCE_URL: "jdbc:mysql://{{ db_host }}:{{ db_port }}/{{ db_name }}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+          SPRING_DATASOURCE_USERNAME: "{{ db_user }}"
+          SPRING_DATASOURCE_PASSWORD: "{{ db_password }}"
+          SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
+          SPRING_PROFILES_ACTIVE: "docker"
+          JAVA_OPTS: "-Xms512m -Xmx1024m"
+          TZ: "UTC"
+        networks:
+          - name: "{{ network_name }}"
+        healthcheck:
+          test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+          interval: 30s
+          timeout: 10s
+          retries: 5
+          start_period: 60s
+
+    # Wait for application to be ready
+    - name: Wait for application to start
+      pause:
+        seconds: 30
+
+    # Verify application container is running
+    - name: Verify application container is running
+      docker_container_info:
+        name: "{{ app_container_name }}"
+      register: app_container_info
+
+    - name: Display application container status
+      debug:
+        msg:
+          - "Container Name: {{ app_container_info.container.Name }}"
+          - "Container State: {{ app_container_info.container.State.Status }}"
+          - "Container Health: {{ app_container_info.container.State.Health | default('N/A') }}"
+          - "Port Mapping: {{ app_container_info.container.HostConfig.PortBindings }}"
+
+    # Wait for application to be ready
+    - name: Wait for application to accept connections
+      wait_for:
+        host: localhost
+        port: "{{ app_port }}"
+        delay: 5
+        timeout: 60
+
+    # Test application endpoint
+    - name: Test application health endpoint
+      uri:
+        url: "http://localhost:{{ app_port }}/actuator/health"
+        method: GET
+        status_code: 200
+      register: health_check
+      until: health_check.status == 200
+      retries: 10
+      delay: 5
+
+    - name: Test application home page
+      uri:
+        url: "http://localhost:{{ app_port }}/"
+        method: GET
+        status_code: 200
+      register: app_test
+      until: app_test.status == 200
+      retries: 10
+      delay: 5
+
+    # Display success message
+    - name: Application deployment successful
+      debug:
+        msg:
+          - "✓ Spring Boot application deployed successfully!"
+          - "Container: {{ app_container_name }}"
+          - "Image: {{ app_image }}"
+          - "Port: {{ app_port }}"
+          - "URL: http://{{ inventory_hostname }}:{{ app_port }}"
+          - "Health: http://{{ inventory_hostname }}:{{ app_port }}/actuator/health"
+          - "Network: {{ network_name }}"
+
+    # Display container logs
+    - name: Display application container logs
+      shell: docker logs --tail 20 {{ app_container_name }}
+      register: app_logs
+
+    - name: Show application logs
+      debug:
+        msg: "{{ app_logs.stdout_lines }}"
+
+  # Error handling
+  rescue:
+    - name: Display error message
+      debug:
+        msg: "Error deploying Spring Boot application container"
+
+    - name: Collect logs
+      shell: docker logs {{ app_container_name }} 2>&1 | tail -100
+      register: docker_logs
+      ignore_errors: yes
+
+    - name: Display Docker logs
+      debug:
+        msg: "{{ docker_logs.stdout }}"
+
+    - name: Get container status
+      shell: docker ps -a | grep {{ app_container_name }}
+      register: container_status
+      ignore_errors: yes
+
+    - name: Display container status
+      debug:
+        msg: "{{ container_status.stdout }}"
+
+    - name: Fail the playbook
+      fail:
+        msg: "Application deployment failed"

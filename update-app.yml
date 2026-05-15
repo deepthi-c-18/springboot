@@ -1,0 +1,181 @@
+---
+# =====================================================
+# Ansible Playbook - Update Spring Boot Application
+# Student Management System
+# =====================================================
+# This playbook updates the Spring Boot application container
+
+- name: Update Spring Boot Application Container
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    app_container_name: spring-app
+    app_container_old: spring-app-old
+    app_image: "{{ app_image | default('student-management-system:latest') }}"
+    app_port: "{{ app_port | default('8085') }}"
+    db_host: "{{ db_host | default('mysql-db') }}"
+    db_port: "{{ db_port | default('3306') }}"
+    db_name: "{{ db_name | default('studentdb') }}"
+    db_user: "{{ db_user | default('student') }}"
+    db_password: "{{ db_password | default('student123') }}"
+    network_name: student-network
+
+  tasks:
+    # Display variables
+    - name: Display update variables
+      debug:
+        msg:
+          - "Updating Spring Boot application"
+          - "Current Container: {{ app_container_name }}"
+          - "New Image: {{ app_image }}"
+          - "Port: {{ app_port }}"
+
+    # Ensure Docker is running
+    - name: Ensure Docker service is running
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    # Create backup of current container
+    - name: Backup current application container
+      docker_container:
+        name: "{{ app_container_name }}"
+        state: stopped
+      ignore_errors: yes
+      register: current_container
+
+    - name: Rename current container for backup
+      shell: docker rename {{ app_container_name }} {{ app_container_old }} 2>/dev/null || true
+      when: current_container is not skipped
+      ignore_errors: yes
+
+    # Pull latest image
+    - name: Pull latest application image
+      docker_image:
+        name: "{{ app_image }}"
+        source: pull
+        pull: always
+
+    # Start new application container
+    - name: Start new application container
+      docker_container:
+        name: "{{ app_container_name }}"
+        image: "{{ app_image }}"
+        state: started
+        restart_policy: unless-stopped
+        ports:
+          - "{{ app_port }}:8080"
+        env:
+          SPRING_DATASOURCE_URL: "jdbc:mysql://{{ db_host }}:{{ db_port }}/{{ db_name }}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+          SPRING_DATASOURCE_USERNAME: "{{ db_user }}"
+          SPRING_DATASOURCE_PASSWORD: "{{ db_password }}"
+          SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
+          SPRING_PROFILES_ACTIVE: "docker"
+          JAVA_OPTS: "-Xms512m -Xmx1024m"
+          TZ: "UTC"
+        networks:
+          - name: "{{ network_name }}"
+        healthcheck:
+          test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+          interval: 30s
+          timeout: 10s
+          retries: 5
+          start_period: 60s
+
+    # Wait for new application to be ready
+    - name: Wait for new application to start
+      pause:
+        seconds: 30
+
+    # Verify new application container is running
+    - name: Verify new application container is running
+      docker_container_info:
+        name: "{{ app_container_name }}"
+      register: new_app_container_info
+
+    - name: Display new application container status
+      debug:
+        msg:
+          - "Container Name: {{ new_app_container_info.container.Name }}"
+          - "Container State: {{ new_app_container_info.container.State.Status }}"
+          - "Port Mapping: {{ new_app_container_info.container.HostConfig.PortBindings }}"
+
+    # Wait for application to accept connections
+    - name: Wait for new application to accept connections
+      wait_for:
+        host: localhost
+        port: "{{ app_port }}"
+        delay: 5
+        timeout: 60
+
+    # Test new application health endpoint
+    - name: Test new application health endpoint
+      uri:
+        url: "http://localhost:{{ app_port }}/actuator/health"
+        method: GET
+        status_code: 200
+      register: health_check
+      until: health_check.status == 200
+      retries: 10
+      delay: 5
+
+    # If health check passes, remove old container
+    - name: Remove old application container
+      docker_container:
+        name: "{{ app_container_old }}"
+        state: absent
+      when: health_check.status == 200
+      ignore_errors: yes
+
+    # Clean up dangling images
+    - name: Cleanup dangling images
+      shell: docker image prune -f
+      ignore_errors: yes
+
+    # Display success message
+    - name: Application update successful
+      debug:
+        msg:
+          - "✓ Application updated successfully!"
+          - "Container: {{ app_container_name }}"
+          - "Image: {{ app_image }}"
+          - "Port: {{ app_port }}"
+          - "Status: Running"
+
+    # Display container logs
+    - name: Display application container logs
+      shell: docker logs --tail 20 {{ app_container_name }}
+      register: app_logs
+
+    - name: Show application logs
+      debug:
+        msg: "{{ app_logs.stdout_lines }}"
+
+  # Error handling
+  rescue:
+    - name: Display error message
+      debug:
+        msg: "Error updating application container"
+
+    - name: Restore old container if update failed
+      shell: |
+        docker stop {{ app_container_name }} 2>/dev/null || true
+        docker rename {{ app_container_old }} {{ app_container_name }} 2>/dev/null || true
+        docker start {{ app_container_name }} 2>/dev/null || true
+      ignore_errors: yes
+
+    - name: Collect logs
+      shell: docker logs {{ app_container_name }} 2>&1 | tail -100
+      register: docker_logs
+      ignore_errors: yes
+
+    - name: Display Docker logs
+      debug:
+        msg: "{{ docker_logs.stdout }}"
+
+    - name: Fail the playbook
+      fail:
+        msg: "Application update failed"

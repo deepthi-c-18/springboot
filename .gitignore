@@ -1,0 +1,110 @@
+# =====================================================
+# Git Ignore File - Student Management System
+# =====================================================
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.iml
+.DS_Store
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+.flattened-pom.xml
+*.class
+
+# Build output
+build/
+out/
+dist/
+
+# Logs
+logs/
+*.log
+*.log.*
+log.txt
+
+# Database
+*.db
+*.sql
+.h2.server.properties
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Jenkins
+.jenkins/
+jenkins-workspace/
+
+# Ansible
+*.retry
+vault_password
+
+# Node (if frontend is in same repo)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# OS
+.DS_Store
+Thumbs.db
+.gitkeep
+
+# Application
+*.jar
+*.war
+application-prod.properties
+application-local.properties
+
+# Spring Boot
+.gradle/
+.gradle
+/build/
+HELP.md
+/mvnw
+/mvnw.cmd
+
+# Test
+test-output/
+jacoco.exec
+.coverage/
+
+# Miscellaneous
+*.orig
+*.rej
+*.patch
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+.loadpath
+.pluginExecution
+
+# Local development
+local-development.properties
+dev-secrets.yml
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Backup files
+*.bak
+*.backup

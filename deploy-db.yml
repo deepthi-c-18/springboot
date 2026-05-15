@@ -1,0 +1,213 @@
+---
+# =====================================================
+# Ansible Playbook - Deploy MySQL Database
+# Student Management System
+# =====================================================
+# This playbook deploys MySQL database container
+
+- name: Deploy MySQL Database Container
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    db_container_name: mysql-db
+    db_image: "{{ db_image | default('mysql:8.0') }}"
+    db_name: "{{ db_name | default('studentdb') }}"
+    db_user: "{{ db_user | default('student') }}"
+    db_password: "{{ db_password | default('student123') }}"
+    db_root_password: "{{ db_root_password | default('rootpassword') }}"
+    db_port: "{{ db_port | default('3306') }}"
+    network_name: student-network
+
+  tasks:
+    # Display variables
+    - name: Display deployment variables
+      debug:
+        msg:
+          - "Database Container: {{ db_container_name }}"
+          - "Database Image: {{ db_image }}"
+          - "Database Name: {{ db_name }}"
+          - "Database User: {{ db_user }}"
+          - "Database Port: {{ db_port }}"
+
+    # Update system packages
+    - name: Update system packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+      retries: 3
+      delay: 5
+
+    # Install Docker
+    - name: Install Docker dependencies
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+      retries: 3
+      delay: 5
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      retries: 3
+      delay: 5
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+      retries: 3
+      delay: 5
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+      retries: 3
+      delay: 5
+
+    - name: Start Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    # Wait for Docker to be ready
+    - name: Wait for Docker to be ready
+      wait_for:
+        path: /var/run/docker.sock
+        state: present
+        delay: 2
+        timeout: 30
+
+    # Create Docker network
+    - name: Create student network
+      docker_network:
+        name: "{{ network_name }}"
+        driver: bridge
+        state: present
+
+    # Stop and remove existing database container if it exists
+    - name: Remove existing MySQL container if running
+      docker_container:
+        name: "{{ db_container_name }}"
+        state: absent
+        force_kill: yes
+      ignore_errors: yes
+
+    # Pull latest MySQL image
+    - name: Pull MySQL Docker image
+      docker_image:
+        name: "{{ db_image }}"
+        source: pull
+        pull: always
+
+    # Create MySQL container
+    - name: Create and start MySQL container
+      docker_container:
+        name: "{{ db_container_name }}"
+        image: "{{ db_image }}"
+        state: started
+        restart_policy: unless-stopped
+        ports:
+          - "{{ db_port }}:3306"
+        env:
+          MYSQL_ROOT_PASSWORD: "{{ db_root_password }}"
+          MYSQL_DATABASE: "{{ db_name }}"
+          MYSQL_USER: "{{ db_user }}"
+          MYSQL_PASSWORD: "{{ db_password }}"
+          MYSQL_ROOT_HOST: "%"
+        volumes:
+          - mysql_data:/var/lib/mysql
+        networks:
+          - name: "{{ network_name }}"
+        command: "--default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci"
+        healthcheck:
+          test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+          interval: 10s
+          timeout: 5s
+          retries: 5
+
+    # Wait for MySQL to be ready
+    - name: Wait for MySQL to be ready
+      pause:
+        seconds: 15
+
+    # Verify MySQL container is running
+    - name: Verify MySQL container is running
+      docker_container_info:
+        name: "{{ db_container_name }}"
+      register: mysql_container_info
+
+    - name: Display MySQL container status
+      debug:
+        msg:
+          - "Container Name: {{ mysql_container_info.container.Name }}"
+          - "Container State: {{ mysql_container_info.container.State.Status }}"
+          - "Container Health: {{ mysql_container_info.container.State.Health | default('N/A') }}"
+          - "Port Mapping: {{ mysql_container_info.container.HostConfig.PortBindings }}"
+
+    # Verify MySQL connection
+    - name: Install MySQL client
+      apt:
+        name: mysql-client-core-8.0
+        state: present
+      retries: 3
+      delay: 5
+
+    - name: Wait for MySQL to accept connections
+      wait_for:
+        host: localhost
+        port: "{{ db_port }}"
+        delay: 5
+        timeout: 30
+
+    - name: Test MySQL connection
+      shell: |
+        mysql -h 127.0.0.1 -u {{ db_user }} -p{{ db_password }} -e "SELECT 1" 2>&1
+      register: mysql_test
+      until: mysql_test.rc == 0
+      retries: 5
+      delay: 5
+
+    # Display success message
+    - name: MySQL deployment successful
+      debug:
+        msg:
+          - "✓ MySQL container deployed successfully!"
+          - "Container: {{ db_container_name }}"
+          - "Database: {{ db_name }}"
+          - "User: {{ db_user }}"
+          - "Port: {{ db_port }}"
+          - "Network: {{ network_name }}"
+
+  # Error handling
+  rescue:
+    - name: Display error message
+      debug:
+        msg: "Error deploying MySQL container"
+
+    - name: Collect logs
+      shell: docker logs {{ db_container_name }} 2>&1 | tail -50
+      register: docker_logs
+      ignore_errors: yes
+
+    - name: Display Docker logs
+      debug:
+        msg: "{{ docker_logs.stdout }}"
+
+    - name: Fail the playbook
+      fail:
+        msg: "MySQL deployment failed"
