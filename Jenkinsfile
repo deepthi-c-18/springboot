@@ -36,8 +36,8 @@ pipeline {
         DB_HOST = 'mysql-db'
         DB_PORT = '3306'
         DB_NAME = 'studentdb'
-        DB_USER = credentials('db-username')
-        DB_PASSWORD = credentials('db-password')
+        DB_USER = credentials('root')
+        DB_PASSWORD = credentials('root')
         
         // Build properties
         BUILD_TIMEOUT = '30'
