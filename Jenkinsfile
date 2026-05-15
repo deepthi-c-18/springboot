@@ -10,7 +10,7 @@ pipeline {
     environment {
         // Application properties
         APP_NAME = 'student-management-system'
-        REPO_URL = 'https://github.com/YOUR_USERNAME/student-management-system.git'
+        REPO_URL = 'https://github.com/deepthi-c-18/student-management-system.git'
         REPO_BRANCH = 'main'
         
         // Docker properties

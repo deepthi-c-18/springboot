@@ -478,10 +478,10 @@ docker login
 docker ps
 
 # Tag local image
-docker tag student-management-system:latest <username>/student-management-system:latest
+docker tag student-management-system:latest deepthic18/student-management-system:latest
 
 # Push to DockerHub
-docker push <username>/student-management-system:latest
+docker push deepthic18/student-management-system:latest
 ```
 
 ---
@@ -492,7 +492,7 @@ docker push <username>/student-management-system:latest
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/student-management-system.git
+git clone https://github.com/deepthi-c-18/student-management-system.git
 
 # Navigate to project directory
 cd student-management-system
@@ -689,7 +689,7 @@ docker run --rm -v mysql_data:/data -v $(pwd):/backup alpine tar czf /backup/mys
 # Configure pipeline:
 1. Definition: Pipeline script from SCM
 2. SCM: Git
-3. Repository URL: https://github.com/YOUR_USERNAME/student-management-system.git
+3. Repository URL: https://github.com/deepthi-c-18/student-management-system.git
 4. Branch: */main
 5. Script Path: Jenkinsfile
 ```
@@ -847,7 +847,7 @@ git add .
 git commit -m "Initial commit: Student Management System with Spring Boot and DevOps"
 
 # Add remote repository
-git remote add origin https://github.com/YOUR_USERNAME/student-management-system.git
+git remote add origin https://github.com/deepthi-c-18/student-management-system.git
 
 # Push to GitHub
 git branch -M main
@@ -955,24 +955,24 @@ docker login
 
 ```bash
 # Tag image
-docker tag student-management-system:latest <username>/student-management-system:latest
+docker tag student-management-system:latest deepthic18/student-management-system:latest
 
 # Push to DockerHub
-docker push <username>/student-management-system:latest
+docker push deepthic18/student-management-system:latest
 
 # Push with version tag
-docker tag student-management-system:latest <username>/student-management-system:1.0
-docker push <username>/student-management-system:1.0
+docker tag student-management-system:latest deepthic18/student-management-system:1.0
+docker push deepthic18/student-management-system:1.0
 ```
 
 ### 4. Pull Image
 
 ```bash
 # Pull image from DockerHub
-docker pull <username>/student-management-system:latest
+docker pull deepthic18/student-management-system:latest
 
 # Run container
-docker run -d -p 8085:8080 <username>/student-management-system:latest
+docker run -d -p 8085:8080 deepthic18/student-management-system:latest
 ```
 
 ---
@@ -1264,7 +1264,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 👥 Author
 
 **DevOps Engineer**
-- GitHub: [@your-username](https://github.com/your-username)
+- GitHub: [@deepthi-c-18](https://github.com/deepthi-c-18)
 - Email: your.email@example.com
 
 ---

@@ -96,7 +96,7 @@ docker rm spring-app
 docker push username/student-management-system:latest
 
 # Pull from DockerHub
-docker pull username/student-management-system:latest
+docker pull deepthic18/student-management-system:latest
 ```
 
 ---
